@@ -18,73 +18,45 @@
       max-width: 600px;
     }
     #overlay {
-      position: fixed;
-      top: 0; left: 0;
-      height: 100vh;
+      position: fixed; top: 0; left: 0; height: 100vh;
       background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       z-index: 10;
     }
     #joinForm {
-      background: #fff;
-      padding: 24px;
-      border-radius: 12px;
-      width: 100%;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      background: #fff; padding: 24px; border-radius: 12px;
+      width: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     #joinForm h3 {
-      margin-top: 0;
-      font-size: 1.4rem;
-      color: #333;
+      margin-top: 0; font-size: 1.4rem; color: #333;
     }
     #joinForm input, #joinForm select {
-      width: 100%;
-      padding: 8px;
-      margin-top: 4px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      box-sizing: border-box;
-      font-size: 1rem;
+      width: 100%; padding: 8px; margin-top: 4px;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-size: 1rem; box-sizing: border-box;
     }
     #joinForm button {
-      margin-top: 12px;
-      width: 100%;
-      padding: 10px;
-      background: #0077cc;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 1rem;
-      cursor: pointer;
+      margin-top: 12px; width: 100%; padding: 10px;
+      background: #0077cc; color: white; border: none;
+      border-radius: 6px; font-size: 1rem; cursor: pointer;
     }
-    #joinForm button:hover {
-      background: #005fa3;
-    }
+    #joinForm button:hover { background: #005fa3; }
+
     #game {
-      border: 3px solid #444;
-      border-radius: 12px;
-      background: #eef2f5;
-      margin-top: 20px;
-      display: block;
+      border: 3px solid #444; border-radius: 12px;
+      background: #eef2f5; margin-top: 20px; display: block;
     }
     #ui {
-      margin-top: 16px;
-      text-align: center;
+      margin-top: 16px; text-align: center;
     }
     #question {
-      font-size: 1.3rem;
-      color: #222;
-      margin-bottom: 10px;
+      font-size: 1.3rem; color: #222; margin-bottom: 10px;
     }
     #scoreboard {
-      margin-top: 12px;
-      text-align: left;
+      margin-top: 12px; text-align: left;
     }
     .player-row {
-      padding: 4px 0;
-      border-bottom: 1px solid #ddd;
+      padding: 4px 0; border-bottom: 1px solid #ddd;
       font-size: 0.95rem;
     }
   </style>
@@ -136,17 +108,19 @@
     let players = {};
     let foodItems = [];
 
-    let CELL;           // size of each cell
+    // Apple image
     const APPLE = new Image();
     APPLE.src = "https://img.icons8.com/emoji/48/000000/red-apple-emoji.png";
 
-    // Responsive canvas + cell sizing
+    // Resize and compute scale
+    let SCALE = 1, CELL = 10;
     function resizeCanvas() {
       const size = Math.min(window.innerWidth * 0.9, 600);
       canvas.width  = size;
       canvas.height = size;
-      CELL = size / 30;              // 30×30 grid
-      ctx.font = `${Math.floor(CELL * 0.6)}px sans-serif`;
+      // original game logic is on a 400×400 coordinate grid
+      SCALE = size / 400;
+      CELL = 10 * SCALE;
     }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
@@ -182,67 +156,75 @@
       draw();
     });
 
-    // DRAW everything
+    // DRAW function
     function draw() {
       ctx.clearRect(0,0,canvas.width,canvas.height);
 
-      // draw food apples
+      // draw apples
       foodItems.forEach(f => {
-        ctx.drawImage(APPLE, f.x, f.y, CELL, CELL);
+        ctx.drawImage(
+          APPLE,
+          f.x * SCALE,
+          f.y * SCALE,
+          CELL, CELL
+        );
+        // draw the number
         ctx.fillStyle = "#fff";
+        ctx.font = `${Math.floor(CELL * 0.6)}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
         ctx.fillText(
           f.value,
-          f.x + CELL * 0.25,
-          f.y + CELL * 0.7
+          f.x * SCALE + CELL/2,
+          f.y * SCALE + CELL/2
         );
       });
 
-      // draw rounded snakes
+      // draw snake segments as circles
       Object.values(players).forEach(p => {
         if (!p.color) return;
         ctx.fillStyle = p.color;
-        const radius = CELL * 0.5;
+        const radius = CELL / 2;
         ctx.beginPath();
-        ctx.arc(p.x + radius, p.y + radius, radius, 0, Math.PI * 2);
+        ctx.arc(
+          p.x * SCALE + radius,
+          p.y * SCALE + radius,
+          radius,
+          0, Math.PI * 2
+        );
         ctx.fill();
       });
     }
 
-    // GAME LOOP
-    let x=50, y=50, dx=CELL, dy=0;
+    // GAME LOOP (movement)
+    let x = 50, y = 50, dx = 10, dy = 0;
     form.addEventListener("submit", () => {
       setInterval(() => {
         x += dx; y += dy;
-        wrap();
+        // wrap
+        if (x >= 400) x = 0;
+        if (x < 0)   x = 390;
+        if (y >= 400) y = 0;
+        if (y < 0)   y = 390;
         socket.emit("move", { x, y });
       }, 120);
+
       document.addEventListener("keydown", e => {
-        if (e.key === "ArrowUp" && dy === 0)    { dx=0;    dy=-CELL; }
-        else if (e.key === "ArrowDown" && dy===0){ dx=0;    dy= CELL; }
-        else if (e.key === "ArrowLeft" && dx===0){ dx=-CELL;dy=0;     }
-        else if (e.key === "ArrowRight" && dx===0){dx= CELL;dy=0;     }
+        if (e.key === "ArrowUp"    && dy === 0) { dx = 0;   dy = -10; }
+        if (e.key === "ArrowDown"  && dy === 0) { dx = 0;   dy = 10;  }
+        if (e.key === "ArrowLeft"  && dx === 0) { dx = -10; dy = 0;   }
+        if (e.key === "ArrowRight" && dx === 0) { dx = 10;  dy = 0;   }
       });
     });
 
-    function wrap() {
-      if (x >= canvas.width)  x = 0;
-      if (x < 0)              x = canvas.width - CELL;
-      if (y >= canvas.height) y = 0;
-      if (y < 0)              y = canvas.height - CELL;
-    }
-
-    // Show question & new food
+    // Show question & food
     function showQuestion(q, food) {
       qDiv.textContent = q;
-      foodItems = food.map(f => ({
-        value: f.value,
-        x: f.x / 400 * canvas.width,    // scale from 400px base to current size
-        y: f.y / 400 * canvas.height
-      }));
+      foodItems = food;
       draw();
     }
 
-    // Update scoreboard
+    // Scoreboard
     function updateScoreboard() {
       playersList.innerHTML = "";
       Object.values(players)
