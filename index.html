@@ -67,17 +67,13 @@
   <div id="overlay">
     <form id="joinForm">
       <h3>Join Math Snake</h3>
-      <label>
-        Name:
-        <input type="text" id="name" required placeholder="Your name" />
-      </label>
-      <label>
-        Color:
+      <label>Name:<br><input type="text" id="name" required placeholder="Your name" /></label><br><br>
+      <label>Color:<br>
         <select id="color">
           <option value="green">Green Snake</option>
           <option value="red">Red Snake</option>
         </select>
-      </label>
+      </label><br><br>
       <button type="submit">Start Game</button>
     </form>
   </div>
@@ -94,6 +90,7 @@
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
+    // ——— Setup —————————————————————————————
     const socket = io("https://snake-server-7quw.onrender.com");
     const overlay = document.getElementById("overlay");
     const form    = document.getElementById("joinForm");
@@ -108,32 +105,46 @@
     let players = {};
     let foodItems = [];
 
-    // Apple image
+    // apple image
     const APPLE = new Image();
     APPLE.src = "https://img.icons8.com/emoji/48/000000/red-apple-emoji.png";
 
-    // Resize and compute scale
+    // Maintain original 400×400 logic with SCALE
     let SCALE = 1, CELL = 10;
     function resizeCanvas() {
       const size = Math.min(window.innerWidth * 0.9, 600);
       canvas.width  = size;
       canvas.height = size;
-      // original game logic is on a 400×400 coordinate grid
       SCALE = size / 400;
-      CELL = 10 * SCALE;
+      CELL  = 10 * SCALE;
     }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    // INITIAL DATA
+    // ——— Server Events ——————————————————————
+
+    // initial state + question
     socket.on("init", ({ players: pl, question, food }) => {
-      players = pl;
+      players   = pl;
       updateScoreboard();
-      showQuestion(question, food);
+      renderQuestion(question, food);
       disableTakenColors(pl);
     });
 
-    // JOIN
+    // new question round
+    socket.on("question-data", ({ question, food }) => {
+      renderQuestion(question, food);
+    });
+
+    // any change in players or scores
+    socket.on("players-update", pl => {
+      players = pl;
+      updateScoreboard();
+      renderScene();
+    });
+
+    // ——— Join & Start ————————————————————————
+
     form.addEventListener("submit", e => {
       e.preventDefault();
       const name  = nameIn.value.trim();
@@ -142,89 +153,45 @@
       me = { name, color };
       socket.emit("join", me);
       overlay.style.display = "none";
+      startGameLoop();
     });
 
-    // NEW QUESTION
-    socket.on("question-data", ({ question, food }) => {
-      showQuestion(question, food);
-    });
+    // ——— Rendering ——————————————————————————
 
-    // PLAYERS UPDATE
-    socket.on("players-update", pl => {
-      players = pl;
-      updateScoreboard();
-      draw();
-    });
-
-    // DRAW function
-    function draw() {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+    function renderScene() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // draw apples
       foodItems.forEach(f => {
-        ctx.drawImage(
-          APPLE,
-          f.x * SCALE,
-          f.y * SCALE,
-          CELL, CELL
-        );
-        // draw the number
+        const x = f.x * SCALE, y = f.y * SCALE;
+        ctx.drawImage(APPLE, x, y, CELL, CELL);
+        // draw label
         ctx.fillStyle = "#fff";
         ctx.font = `${Math.floor(CELL * 0.6)}px sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(
-          f.value,
-          f.x * SCALE + CELL/2,
-          f.y * SCALE + CELL/2
-        );
+        ctx.fillText(f.value, x + CELL/2, y + CELL/2);
       });
 
-      // draw snake segments as circles
+      // draw snakes
       Object.values(players).forEach(p => {
         if (!p.color) return;
         ctx.fillStyle = p.color;
         const radius = CELL / 2;
+        const cx = p.x * SCALE + radius;
+        const cy = p.y * SCALE + radius;
         ctx.beginPath();
-        ctx.arc(
-          p.x * SCALE + radius,
-          p.y * SCALE + radius,
-          radius,
-          0, Math.PI * 2
-        );
+        ctx.arc(cx, cy, radius, 0, Math.PI*2);
         ctx.fill();
       });
     }
 
-    // GAME LOOP (movement)
-    let x = 50, y = 50, dx = 10, dy = 0;
-    form.addEventListener("submit", () => {
-      setInterval(() => {
-        x += dx; y += dy;
-        // wrap
-        if (x >= 400) x = 0;
-        if (x < 0)   x = 390;
-        if (y >= 400) y = 0;
-        if (y < 0)   y = 390;
-        socket.emit("move", { x, y });
-      }, 120);
-
-      document.addEventListener("keydown", e => {
-        if (e.key === "ArrowUp"    && dy === 0) { dx = 0;   dy = -10; }
-        if (e.key === "ArrowDown"  && dy === 0) { dx = 0;   dy = 10;  }
-        if (e.key === "ArrowLeft"  && dx === 0) { dx = -10; dy = 0;   }
-        if (e.key === "ArrowRight" && dx === 0) { dx = 10;  dy = 0;   }
-      });
-    });
-
-    // Show question & food
-    function showQuestion(q, food) {
+    function renderQuestion(q, food) {
       qDiv.textContent = q;
       foodItems = food;
-      draw();
+      renderScene();
     }
 
-    // Scoreboard
     function updateScoreboard() {
       playersList.innerHTML = "";
       Object.values(players)
@@ -238,12 +205,35 @@
         });
     }
 
-    // Disable taken colors
     function disableTakenColors(pl) {
       const taken = Object.values(pl).map(p => p.color).filter(Boolean);
       Array.from(colorIn.options).forEach(opt => {
         opt.disabled = taken.includes(opt.value);
       });
+    }
+
+    // ——— Game Loop & Movement ——————————————————
+
+    let x = 50, y = 50, dx = 10, dy = 0, loopStarted = false;
+    function startGameLoop() {
+      if (loopStarted) return;
+      loopStarted = true;
+
+      document.addEventListener("keydown", e => {
+        if (e.key === "ArrowUp"    && dy === 0) { dx = 0;   dy = -10; }
+        if (e.key === "ArrowDown"  && dy === 0) { dx = 0;   dy =  10; }
+        if (e.key === "ArrowLeft"  && dx === 0) { dx = -10; dy =  0;  }
+        if (e.key === "ArrowRight" && dx === 0) { dx =  10; dy =  0;  }
+      });
+
+      setInterval(() => {
+        x += dx; y += dy;
+        if (x >= 400) x = 0;
+        if (x < 0)    x = 390;
+        if (y >= 400) y = 0;
+        if (y < 0)    y = 390;
+        socket.emit("move", { x, y });
+      }, 120);
     }
   </script>
 </body>
