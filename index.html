@@ -7,58 +7,150 @@
   <style>
     body {
       margin: 0;
-      font-family: sans-serif;
+      font-family: 'Arial Rounded MT Bold', sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
       display: flex;
       flex-direction: column;
       align-items: center;
+      min-height: 100vh;
     }
-    #overlay, #ui {
-      width: 90vw;
-      max-width: 600px;
-    }
+
     #overlay {
       position: fixed;
-      top: 0; left: 0;
-      height: 100vh;
-      background: rgba(0,0,0,0.8);
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 10;
+      z-index: 1000;
+      backdrop-filter: blur(5px);
     }
+
     #joinForm {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      width: 100%;
-      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2rem;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
     }
+
+    #joinForm h3 {
+      color: white;
+      margin: 0 0 1.5rem;
+      text-align: center;
+      font-size: 1.8rem;
+    }
+
+    #joinForm label {
+      display: block;
+      margin-bottom: 1rem;
+    }
+
+    #joinForm input,
+    #joinForm select {
+      width: 100%;
+      padding: 0.8rem;
+      margin-top: 0.5rem;
+      border: none;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.9);
+      font-size: 1rem;
+      transition: transform 0.2s ease;
+    }
+
+    #joinForm input:focus,
+    #joinForm select:focus {
+      outline: none;
+      transform: scale(1.02);
+      box-shadow: 0 0 10px rgba(255,255,255,0.3);
+    }
+
+    #joinForm button {
+      width: 100%;
+      padding: 1rem;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: all 0.3s ease;
+    }
+
+    #joinForm button:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+
     #game {
-      border: 2px solid #000;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-radius: 15px;
       width: 90vw;
       height: 90vw;
       max-width: 600px;
       max-height: 600px;
-      display: block;
-      margin-top: 20px;
+      margin-top: 2rem;
+      background: rgba(0,0,0,0.3);
+      box-shadow: 0 0 30px rgba(0,0,0,0.4);
     }
+
     #ui {
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      width: 90%;
+      max-width: 600px;
+      margin: 1.5rem 0;
     }
+
     #question {
-      font-size: 1.2rem;
-      margin-bottom: 10px;
+      background: rgba(255,255,255,0.1);
+      padding: 1.2rem;
+      border-radius: 12px;
+      font-size: 1.4rem;
       text-align: center;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(5px);
+      border: 1px solid rgba(255,255,255,0.2);
     }
+
     #scoreboard {
-      margin-top: 10px;
+      background: rgba(0,0,0,0.3);
+      padding: 1rem;
+      border-radius: 12px;
       width: 100%;
     }
+
+    #scoreboard strong {
+      display: block;
+      font-size: 1.3rem;
+      margin-bottom: 1rem;
+      color: #4CAF50;
+    }
+
     .player-row {
-      margin: 4px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.8rem;
+      margin: 0.5rem 0;
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      transition: transform 0.2s ease;
+    }
+
+    .player-row:hover {
+      transform: translateX(10px);
+    }
+
+    .player-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      margin-right: 1rem;
     }
   </style>
 </head>
@@ -67,30 +159,28 @@
   <!-- Join Modal -->
   <div id="overlay">
     <form id="joinForm">
-      <h3>Join Game</h3>
+      <h3>🚀 Math Snake Arena</h3>
       <label>
-        Name:<br>
-        <input type="text" id="name" required style="width:100%; padding:5px; box-sizing:border-box;">
+        <input type="text" id="name" required placeholder="Enter your name">
       </label>
-      <br><br>
       <label>
-        Color:<br>
-        <select id="color" style="width:100%; padding:5px; box-sizing:border-box;">
-          <option value="green">Green</option>
-          <option value="red">Red</option>
+        <select id="color">
+          <option value="#4CAF50">Green</option>
+          <option value="#2196F3">Blue</option>
+          <option value="#E91E63">Pink</option>
+          <option value="#FFC107">Yellow</option>
         </select>
       </label>
-      <br><br>
-      <button type="submit" style="padding:10px 20px;">Join!</button>
+      <button type="submit">Join Battle! 🎮</button>
     </form>
   </div>
 
   <canvas id="game"></canvas>
 
   <div id="ui">
-    <div id="question">Loading question…</div>
+    <div id="question">Solve the equation to collect the correct answer!</div>
     <div id="scoreboard">
-      <strong>Scoreboard</strong>
+      <strong>Leaderboard 🏆</strong>
       <div id="playersList"></div>
     </div>
   </div>
@@ -99,136 +189,139 @@
   <script>
     const socket = io("https://snake-server-7quw.onrender.com");
     const overlay = document.getElementById("overlay");
-    const form    = document.getElementById("joinForm");
-    const nameIn  = document.getElementById("name");
-    const colorIn = document.getElementById("color");
-    const canvas  = document.getElementById("game");
-    const ctx     = canvas.getContext("2d");
-    const qDiv    = document.getElementById("question");
-    const playersList = document.getElementById("playersList");
-
-    let me = { name: null, color: null };
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
     let players = {};
     let foodItems = [];
 
-    // Responsive canvas setup
+    // Improved Canvas Setup
     function resizeCanvas() {
       const size = Math.min(window.innerWidth * 0.9, 600);
-      canvas.width  = size;
+      canvas.width = size;
       canvas.height = size;
-      ctx.font = `${Math.floor(size / 40)}px sans-serif`;
+      ctx.font = `${Math.floor(size / 35)}px 'Arial Rounded MT Bold'`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
     }
-    window.addEventListener("resize", resizeCanvas);
+    window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // INITIAL DATA from server
-    socket.on("init", ({ players: pl, question, food }) => {
-      players = pl;
-      updateScoreboard();
-      showQuestion(question, food);
-      disableTakenColors(pl);
-    });
-
-    // JOIN form
-    form.addEventListener("submit", e => {
+    // Game Join Handler
+    document.getElementById("joinForm").addEventListener("submit", e => {
       e.preventDefault();
-      const name  = nameIn.value.trim();
-      const color = colorIn.value;
+      const name = document.getElementById("name").value.trim();
+      const color = document.getElementById("color").value;
       if (!name) return;
-      me = { name, color };
-      socket.emit("join", me);
+      socket.emit("join", { name, color });
       overlay.style.display = "none";
     });
 
-    // Receive new question & food
-    socket.on("question-data", ({ question, food }) => {
-      showQuestion(question, food);
-    });
-
-    // Players update (positions & scores)
-    socket.on("players-update", pl => {
+    // Server Event Handlers
+    socket.on("init", ({ players: pl, question, food }) => {
       players = pl;
+      foodItems = food;
       updateScoreboard();
       draw();
     });
 
-    // DRAW function
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Draw food squares with labels
-      foodItems.forEach(f => {
-        ctx.fillStyle = "#f90";
-        ctx.fillRect(f.x, f.y, 10, 10);
-        ctx.fillStyle = "#000";
-        ctx.fillText(
-          f.value,
-          f.x + 2,
-          f.y + parseInt(ctx.font, 10) - 2
-        );
-      });
-
-      // Draw snakes
-      Object.values(players).forEach(p => {
-        if (!p.color) return;
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 10, 10);
-      });
-    }
-
-    // GAME LOOP
-    let x = 50, y = 50, dx = 5, dy = 0;
-    form.addEventListener("submit", () => {
-      setInterval(() => {
-        x += dx; y += dy;
-        wrap();
-        socket.emit("move", { x, y });
-      }, 100);
-
-      document.addEventListener("keydown", e => {
-        if (e.key === "ArrowUp")    { dx = 0; dy = -5; }
-        else if (e.key === "ArrowDown")  { dx = 0; dy = 5; }
-        else if (e.key === "ArrowLeft")  { dx = -5; dy = 0; }
-        else if (e.key === "ArrowRight") { dx = 5; dy = 0; }
-      });
-    });
-
-    function wrap() {
-      if (x > canvas.width)  x = 0;
-      if (x < 0)             x = canvas.width;
-      if (y > canvas.height) y = 0;
-      if (y < 0)             y = canvas.height;
-    }
-
-    // SHOW QUESTION & FOOD items
-    function showQuestion(q, food) {
-      qDiv.textContent = q;
+    socket.on("question-data", ({ question, food }) => {
+      document.getElementById("question").textContent = question;
       foodItems = food;
       draw();
+    });
+
+    socket.on("players-update", pl => {
+      players = pl;
+      updateScoreboard();
+      requestAnimationFrame(draw);
+    });
+
+    // Enhanced Drawing Functions
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      drawFood();
+      drawPlayers();
     }
 
-    // SCOREBOARD
-    function updateScoreboard() {
-      playersList.innerHTML = "";
-      Object.values(players)
-        .filter(p => p.name)
-        .sort((a, b) => b.score - a.score)
-        .forEach(p => {
-          const div = document.createElement("div");
-          div.className = "player-row";
-          div.textContent = `${p.name} (${p.color}): ${p.score}`;
-          playersList.appendChild(div);
-        });
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 0.5;
+      const cellSize = 20;
+      for (let x = 0; x <= canvas.width; x += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= canvas.height; y += cellSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
     }
 
-    // Disable taken colors in join form
-    function disableTakenColors(pl) {
-      const taken = Object.values(pl).map(p => p.color).filter(Boolean);
-      Array.from(colorIn.options).forEach(opt => {
-        opt.disabled = taken.includes(opt.value);
+    function drawFood() {
+      foodItems.forEach(food => {
+        const isNegative = food.value < 0;
+        ctx.beginPath();
+        ctx.arc(food.x + 5, food.y + 5, 8, 0, Math.PI * 2);
+        ctx.fillStyle = isNegative ? '#FF5252' : '#4CAF50';
+        ctx.fill();
+        ctx.fillStyle = 'white';
+        ctx.fillText(food.value, food.x + 5, food.y + 5);
       });
     }
-  </script>
 
+    function drawPlayers() {
+      Object.values(players).forEach(player => {
+        // Draw snake body with gradient
+        const gradient = ctx.createLinearGradient(player.x, player.y, player.x + 15, player.y + 15);
+        gradient.addColorStop(0, player.color);
+        gradient.addColorStop(1, adjustColor(player.color, -20));
+        
+        ctx.beginPath();
+        ctx.roundRect(player.x, player.y, 12, 12, 4);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // Draw player name
+        ctx.fillStyle = 'white';
+        ctx.fillText(player.name, player.x + 6, player.y - 10);
+      });
+    }
+
+    // Scoreboard Management
+    function updateScoreboard() {
+      const playersList = document.getElementById("playersList");
+      playersList.innerHTML = Object.values(players)
+        .sort((a, b) => b.score - a.score)
+        .map(player => `
+          <div class="player-row">
+            <div style="display: flex; align-items: center;">
+              <div class="player-color" style="background: ${player.color}"></div>
+              ${player.name}
+            </div>
+            <div>${player.score} pts</div>
+          </div>
+        `).join('');
+    }
+
+    // Utility Functions
+    function adjustColor(color, amount) {
+      return '#' + color.replace(/^#/, '')
+        .replace(/../g, c => ('0' + Math.min(255, Math.max(0, parseInt(c, 16) + amount)).toString(16)).slice(-2));
+    }
+
+    // Prevent color selection duplicates
+    socket.on("init", ({ players: pl }) => {
+      const colorSelect = document.getElementById("color");
+      const takenColors = Object.values(pl).map(p => p.color);
+      Array.from(colorSelect.options).forEach(option => {
+        option.disabled = takenColors.includes(option.value);
+      });
+    });
+  </script>
 </body>
 </html>
