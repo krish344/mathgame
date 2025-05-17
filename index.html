@@ -3,21 +3,63 @@
 <head>
   <meta charset="UTF-8" />
   <title>Math Snake Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
-    #overlay, #ui { width:90vw; max-width:600px; }
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #overlay, #ui {
+      width: 90vw;
+      max-width: 600px;
+    }
     #overlay {
-      position:fixed; top:0; left:0; height:100vh; background:rgba(0,0,0,0.8);
-      display:flex; align-items:center; justify-content:center;
+      position: fixed;
+      top: 0; left: 0;
+      height: 100vh;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
     }
     #joinForm {
-      background:#fff; padding:20px; border-radius:8px; width:100%;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
     }
-    #game { border:2px solid #000; width:90vw; height:90vw; max-width:600px; max-height:600px; }
-    #ui { margin-top:10px; display:flex; flex-direction:column; align-items:center; }
-    #question { font-size:1.2rem; margin-bottom:10px; }
-    #scoreboard { margin-top:10px; }
-    .player-row { margin:4px 0; }
+    #game {
+      border: 2px solid #000;
+      width: 90vw;
+      height: 90vw;
+      max-width: 600px;
+      max-height: 600px;
+      display: block;
+      margin-top: 20px;
+    }
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #question {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    #scoreboard {
+      margin-top: 10px;
+      width: 100%;
+    }
+    .player-row {
+      margin: 4px 0;
+    }
   </style>
 </head>
 <body>
@@ -26,21 +68,31 @@
   <div id="overlay">
     <form id="joinForm">
       <h3>Join Game</h3>
-      <label>Name:<br><input type="text" id="name" required></label><br><br>
-      <label>Color:<br>
-        <select id="color">
+      <label>
+        Name:<br>
+        <input type="text" id="name" required style="width:100%; padding:5px; box-sizing:border-box;">
+      </label>
+      <br><br>
+      <label>
+        Color:<br>
+        <select id="color" style="width:100%; padding:5px; box-sizing:border-box;">
           <option value="green">Green</option>
           <option value="red">Red</option>
         </select>
-      </label><br><br>
-      <button type="submit">Join!</button>
+      </label>
+      <br><br>
+      <button type="submit" style="padding:10px 20px;">Join!</button>
     </form>
   </div>
 
   <canvas id="game"></canvas>
+
   <div id="ui">
     <div id="question">Loading question…</div>
-    <div id="scoreboard"><strong>Scoreboard</strong><div id="playersList"></div></div>
+    <div id="scoreboard">
+      <strong>Scoreboard</strong>
+      <div id="playersList"></div>
+    </div>
   </div>
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -55,11 +107,21 @@
     const qDiv    = document.getElementById("question");
     const playersList = document.getElementById("playersList");
 
-    let me = { name:null, color:null };
+    let me = { name: null, color: null };
     let players = {};
     let foodItems = [];
 
-    // handle initial state
+    // Responsive canvas setup
+    function resizeCanvas() {
+      const size = Math.min(window.innerWidth * 0.9, 600);
+      canvas.width  = size;
+      canvas.height = size;
+      ctx.font = `${Math.floor(size / 40)}px sans-serif`;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // INITIAL DATA from server
     socket.on("init", ({ players: pl, question, food }) => {
       players = pl;
       updateScoreboard();
@@ -67,38 +129,46 @@
       disableTakenColors(pl);
     });
 
-    // after join
+    // JOIN form
     form.addEventListener("submit", e => {
       e.preventDefault();
-      me.name  = nameIn.value.trim();
-      me.color = colorIn.value;
+      const name  = nameIn.value.trim();
+      const color = colorIn.value;
+      if (!name) return;
+      me = { name, color };
       socket.emit("join", me);
       overlay.style.display = "none";
     });
 
-    // question update
+    // Receive new question & food
     socket.on("question-data", ({ question, food }) => {
       showQuestion(question, food);
     });
 
-    // players or scores update
+    // Players update (positions & scores)
     socket.on("players-update", pl => {
       players = pl;
       updateScoreboard();
       draw();
     });
 
-    // draw loop
+    // DRAW function
     function draw() {
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      // draw foods
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw food squares with labels
       foodItems.forEach(f => {
         ctx.fillStyle = "#f90";
         ctx.fillRect(f.x, f.y, 10, 10);
         ctx.fillStyle = "#000";
-        ctx.fillText(f.value, f.x+2, f.y+8);
+        ctx.fillText(
+          f.value,
+          f.x + 2,
+          f.y + parseInt(ctx.font, 10) - 2
+        );
       });
-      // draw snakes
+
+      // Draw snakes
       Object.values(players).forEach(p => {
         if (!p.color) return;
         ctx.fillStyle = p.color;
@@ -106,43 +176,44 @@
       });
     }
 
-    // game loop / movement
-    let x=50,y=50,dx=5,dy=0;
-    form.addEventListener("submit",_=>{ // after joining, start loop
-      setInterval(()=>{
-        x+=dx; y+=dy;
+    // GAME LOOP
+    let x = 50, y = 50, dx = 5, dy = 0;
+    form.addEventListener("submit", () => {
+      setInterval(() => {
+        x += dx; y += dy;
         wrap();
-        socket.emit("move", { x,y });
+        socket.emit("move", { x, y });
       }, 100);
-      document.addEventListener("keydown", e=>{
-        if(e.key==="ArrowUp"){dx=0;dy=-5;}
-        if(e.key==="ArrowDown"){dx=0;dy=5;}
-        if(e.key==="ArrowLeft"){dx=-5;dy=0;}
-        if(e.key==="ArrowRight"){dx=5;dy=0;}
+
+      document.addEventListener("keydown", e => {
+        if (e.key === "ArrowUp")    { dx = 0; dy = -5; }
+        else if (e.key === "ArrowDown")  { dx = 0; dy = 5; }
+        else if (e.key === "ArrowLeft")  { dx = -5; dy = 0; }
+        else if (e.key === "ArrowRight") { dx = 5; dy = 0; }
       });
     });
 
-    function wrap(){
-      if(x>canvas.width) x=0;
-      if(x<0) x=canvas.width;
-      if(y>canvas.height) y=0;
-      if(y<0) y=canvas.height;
+    function wrap() {
+      if (x > canvas.width)  x = 0;
+      if (x < 0)             x = canvas.width;
+      if (y > canvas.height) y = 0;
+      if (y < 0)             y = canvas.height;
     }
 
-    // Show question & place foods
+    // SHOW QUESTION & FOOD items
     function showQuestion(q, food) {
       qDiv.textContent = q;
       foodItems = food;
       draw();
     }
 
-    // Scoreboard
+    // SCOREBOARD
     function updateScoreboard() {
       playersList.innerHTML = "";
       Object.values(players)
-        .filter(p=>p.name)
-        .sort((a,b)=>b.score - a.score)
-        .forEach(p=>{
+        .filter(p => p.name)
+        .sort((a, b) => b.score - a.score)
+        .forEach(p => {
           const div = document.createElement("div");
           div.className = "player-row";
           div.textContent = `${p.name} (${p.color}): ${p.score}`;
@@ -150,13 +221,14 @@
         });
     }
 
-    // disable taken colors on join UI
+    // Disable taken colors in join form
     function disableTakenColors(pl) {
-      const taken = Object.values(pl).map(p=>p.color).filter(Boolean);
-      Array.from(colorIn.options).forEach(opt=>{
+      const taken = Object.values(pl).map(p => p.color).filter(Boolean);
+      Array.from(colorIn.options).forEach(opt => {
         opt.disabled = taken.includes(opt.value);
       });
     }
   </script>
+
 </body>
 </html>
