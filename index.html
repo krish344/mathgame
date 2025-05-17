@@ -5,23 +5,61 @@
   <title>Math Snake Game</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { margin:0; font-family:sans-serif; background:#f0f4f8; display:flex; flex-direction:column; align-items:center }
-    #overlay, #ui { width:90vw; max-width:600px }
-    #overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5);
-               display:flex; align-items:center; justify-content:center; z-index:10 }
-    #joinForm { background:#fff; padding:24px; border-radius:12px; width:100%;
-                box-shadow:0 4px 12px rgba(0,0,0,0.15) }
-    #joinForm input, #joinForm select, #joinForm button {
-      width:100%; padding:8px; margin-top:8px; font-size:1rem;
-      box-sizing:border-box;
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
-    #joinForm button { background:#0077cc; color:white; border:none; border-radius:6px; cursor:pointer }
-    #joinForm button:hover { background:#005fa3 }
-    #game { border:3px solid #444; border-radius:12px; background:#eef2f5; margin-top:20px; }
-    #ui { margin-top:16px; text-align:center }
-    #question { font-size:1.3rem; color:#222; margin-bottom:10px }
-    #scoreboard { text-align:left; width:100% }
-    .player-row { padding:4px 0; border-bottom:1px solid #ddd; font-size:0.95rem }
+    #overlay, #ui {
+      width: 90vw;
+      max-width: 600px;
+    }
+    #overlay {
+      position: fixed;
+      top: 0; left: 0;
+      height: 100vh;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    #joinForm {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #game {
+      border: 2px solid #000;
+      width: 90vw;
+      height: 90vw;
+      max-width: 600px;
+      max-height: 600px;
+      display: block;
+      margin-top: 20px;
+    }
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #question {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    #scoreboard {
+      margin-top: 10px;
+      width: 100%;
+    }
+    .player-row {
+      margin: 4px 0;
+    }
   </style>
 </head>
 <body>
@@ -29,21 +67,28 @@
   <!-- Join Modal -->
   <div id="overlay">
     <form id="joinForm">
-      <h3>Join Math Snake</h3>
-      <input type="text" id="name" placeholder="Your name" required />
-      <select id="color">
-        <option value="green">Green Snake</option>
-        <option value="red">Red Snake</option>
-      </select>
-      <button type="submit">Start Game</button>
+      <h3>Join Game</h3>
+      <label>
+        Name:<br>
+        <input type="text" id="name" required style="width:100%; padding:5px; box-sizing:border-box;">
+      </label>
+      <br><br>
+      <label>
+        Color:<br>
+        <select id="color" style="width:100%; padding:5px; box-sizing:border-box;">
+          <option value="green">Green</option>
+          <option value="red">Red</option>
+        </select>
+      </label>
+      <br><br>
+      <button type="submit" style="padding:10px 20px;">Join!</button>
     </form>
   </div>
 
   <canvas id="game"></canvas>
 
-  <!-- UI is always present, just empty until we get data -->
   <div id="ui">
-    <div id="question">Waiting for question…</div>
+    <div id="question">Loading question…</div>
     <div id="scoreboard">
       <strong>Scoreboard</strong>
       <div id="playersList"></div>
@@ -54,83 +99,121 @@
   <script>
     const socket = io("https://snake-server-7quw.onrender.com");
     const overlay = document.getElementById("overlay");
-    const joinForm = document.getElementById("joinForm");
-    const nameIn = document.getElementById("name");
+    const form    = document.getElementById("joinForm");
+    const nameIn  = document.getElementById("name");
     const colorIn = document.getElementById("color");
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
-    const qDiv = document.getElementById("question");
+    const canvas  = document.getElementById("game");
+    const ctx     = canvas.getContext("2d");
+    const qDiv    = document.getElementById("question");
     const playersList = document.getElementById("playersList");
-    let me = null, players = {}, foodItems = [];
 
-    // Apple image
-    const APPLE = new Image();
-    APPLE.src = "https://img.icons8.com/emoji/48/000000/red-apple-emoji.png";
+    let me = { name: null, color: null };
+    let players = {};
+    let foodItems = [];
 
-    // Keep server’s 0–400 coords, scale to canvas
-    let SCALE=1, CELL=10;
-    function resizeCanvas(){
-      const size = Math.min(window.innerWidth*0.9, 600);
-      canvas.width = canvas.height = size;
-      SCALE = size/400;
-      CELL = 10*SCALE;
+    // Responsive canvas setup
+    function resizeCanvas() {
+      const size = Math.min(window.innerWidth * 0.9, 600);
+      canvas.width  = size;
+      canvas.height = size;
+      ctx.font = `${Math.floor(size / 40)}px sans-serif`;
     }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    // Server events
+    // INITIAL DATA from server
     socket.on("init", ({ players: pl, question, food }) => {
-      players = pl; foodItems = food;
-      qDiv.textContent = question;
-      renderScene();
+      players = pl;
       updateScoreboard();
+      showQuestion(question, food);
       disableTakenColors(pl);
     });
-    socket.on("question-data", ({ question, food }) => {
-      foodItems = food; qDiv.textContent = question; renderScene();
-    });
-    socket.on("players-update", pl => {
-      players = pl; renderScene(); updateScoreboard();
-    });
 
-    // Join & start
-    joinForm.addEventListener("submit", e => {
+    // JOIN form
+    form.addEventListener("submit", e => {
       e.preventDefault();
-      me = { name: nameIn.value.trim(), color: colorIn.value };
+      const name  = nameIn.value.trim();
+      const color = colorIn.value;
+      if (!name) return;
+      me = { name, color };
       socket.emit("join", me);
       overlay.style.display = "none";
-      startGameLoop();
     });
 
-    // Draw everything
-    function renderScene(){
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      // draw apples
+    // Receive new question & food
+    socket.on("question-data", ({ question, food }) => {
+      showQuestion(question, food);
+    });
+
+    // Players update (positions & scores)
+    socket.on("players-update", pl => {
+      players = pl;
+      updateScoreboard();
+      draw();
+    });
+
+    // DRAW function
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw food squares with labels
       foodItems.forEach(f => {
-        ctx.drawImage(APPLE, f.x*SCALE, f.y*SCALE, CELL, CELL);
-        ctx.fillStyle="#fff";
-        ctx.font = `${CELL*0.6}px sans-serif`;
-        ctx.textAlign="center"; ctx.textBaseline="middle";
-        ctx.fillText(f.value, f.x*SCALE + CELL/2, f.y*SCALE + CELL/2);
+        ctx.fillStyle = "#f90";
+        ctx.fillRect(f.x, f.y, 10, 10);
+        ctx.fillStyle = "#000";
+        ctx.fillText(
+          f.value,
+          f.x + 2,
+          f.y + parseInt(ctx.font, 10) - 2
+        );
       });
-      // draw snakes
+
+      // Draw snakes
       Object.values(players).forEach(p => {
-        if(!p.color) return;
+        if (!p.color) return;
         ctx.fillStyle = p.color;
-        const r = CELL/2;
-        ctx.beginPath();
-        ctx.arc(p.x*SCALE + r, p.y*SCALE + r, r, 0, 2*Math.PI);
-        ctx.fill();
+        ctx.fillRect(p.x, p.y, 10, 10);
       });
     }
 
-    // Scoreboard
-    function updateScoreboard(){
+    // GAME LOOP
+    let x = 50, y = 50, dx = 5, dy = 0;
+    form.addEventListener("submit", () => {
+      setInterval(() => {
+        x += dx; y += dy;
+        wrap();
+        socket.emit("move", { x, y });
+      }, 100);
+
+      document.addEventListener("keydown", e => {
+        if (e.key === "ArrowUp")    { dx = 0; dy = -5; }
+        else if (e.key === "ArrowDown")  { dx = 0; dy = 5; }
+        else if (e.key === "ArrowLeft")  { dx = -5; dy = 0; }
+        else if (e.key === "ArrowRight") { dx = 5; dy = 0; }
+      });
+    });
+
+    function wrap() {
+      if (x > canvas.width)  x = 0;
+      if (x < 0)             x = canvas.width;
+      if (y > canvas.height) y = 0;
+      if (y < 0)             y = canvas.height;
+    }
+
+    // SHOW QUESTION & FOOD items
+    function showQuestion(q, food) {
+      qDiv.textContent = q;
+      foodItems = food;
+      draw();
+    }
+
+    // SCOREBOARD
+    function updateScoreboard() {
       playersList.innerHTML = "";
       Object.values(players)
-        .filter(p=>p.name)
-        .sort((a,b)=>b.score - a.score)
-        .forEach(p=>{
+        .filter(p => p.name)
+        .sort((a, b) => b.score - a.score)
+        .forEach(p => {
           const div = document.createElement("div");
           div.className = "player-row";
           div.textContent = `${p.name} (${p.color}): ${p.score}`;
@@ -138,32 +221,14 @@
         });
     }
 
-    // Disable taken colors
-    function disableTakenColors(pl){
-      const taken = Object.values(pl).map(p=>p.color).filter(Boolean);
-      Array.from(colorIn.options).forEach(opt=>{
+    // Disable taken colors in join form
+    function disableTakenColors(pl) {
+      const taken = Object.values(pl).map(p => p.color).filter(Boolean);
+      Array.from(colorIn.options).forEach(opt => {
         opt.disabled = taken.includes(opt.value);
       });
     }
-
-    // Game loop
-    let x=50,y=50,dx=10,dy=0,started=false;
-    function startGameLoop(){
-      if(started) return;
-      started = true;
-      document.addEventListener("keydown", e => {
-        if(e.key==="ArrowUp"&&dy===0){ dx=0;dy=-10; }
-        if(e.key==="ArrowDown"&&dy===0){ dx=0;dy=10; }
-        if(e.key==="ArrowLeft"&&dx===0){ dx=-10;dy=0; }
-        if(e.key==="ArrowRight"&&dx===0){dx=10;dy=0; }
-      });
-      setInterval(()=>{
-        x+=dx; y+=dy;
-        if(x>=400) x=0; if(x<0) x=390;
-        if(y>=400) y=0; if(y<0) y=390;
-        socket.emit("move",{x,y});
-      },120);
-    }
   </script>
+
 </body>
 </html>
