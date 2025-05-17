@@ -2,86 +2,161 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Multiplayer Snake Game</title>
+  <title>Math Snake Game</title>
   <style>
-    canvas { border: 2px solid #000; background: #f2f2f2; }
+    body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; }
+    #overlay, #ui { width:90vw; max-width:600px; }
+    #overlay {
+      position:fixed; top:0; left:0; height:100vh; background:rgba(0,0,0,0.8);
+      display:flex; align-items:center; justify-content:center;
+    }
+    #joinForm {
+      background:#fff; padding:20px; border-radius:8px; width:100%;
+    }
+    #game { border:2px solid #000; width:90vw; height:90vw; max-width:600px; max-height:600px; }
+    #ui { margin-top:10px; display:flex; flex-direction:column; align-items:center; }
+    #question { font-size:1.2rem; margin-bottom:10px; }
+    #scoreboard { margin-top:10px; }
+    .player-row { margin:4px 0; }
   </style>
 </head>
 <body>
-  <h2>Multiplayer Snake Game</h2>
-  <canvas id="game" width="400" height="400"></canvas>
+
+  <!-- Join Modal -->
+  <div id="overlay">
+    <form id="joinForm">
+      <h3>Join Game</h3>
+      <label>Name:<br><input type="text" id="name" required></label><br><br>
+      <label>Color:<br>
+        <select id="color">
+          <option value="green">Green</option>
+          <option value="red">Red</option>
+        </select>
+      </label><br><br>
+      <button type="submit">Join!</button>
+    </form>
+  </div>
+
+  <canvas id="game"></canvas>
+  <div id="ui">
+    <div id="question">Loading question…</div>
+    <div id="scoreboard"><strong>Scoreboard</strong><div id="playersList"></div></div>
+  </div>
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
-
     const socket = io("https://snake-server-7quw.onrender.com");
+    const overlay = document.getElementById("overlay");
+    const form    = document.getElementById("joinForm");
+    const nameIn  = document.getElementById("name");
+    const colorIn = document.getElementById("color");
+    const canvas  = document.getElementById("game");
+    const ctx     = canvas.getContext("2d");
+    const qDiv    = document.getElementById("question");
+    const playersList = document.getElementById("playersList");
 
+    let me = { name:null, color:null };
     let players = {};
-    let myColor = null;
+    let foodItems = [];
 
-    // Ask for color
-    socket.on("choose-color", (takenColors) => {
-      const availableColors = ["green", "red"].filter(c => !takenColors.includes(c));
-      let choice = prompt(`Choose your color: ${availableColors.join(" or ")}`);
-      if (!availableColors.includes(choice)) {
-        alert(`Invalid or already taken. You have been assigned: ${availableColors[0]}`);
-        choice = availableColors[0];
-      }
-      myColor = choice;
-      socket.emit("color-chosen", choice);
+    // handle initial state
+    socket.on("init", ({ players: pl, question, food }) => {
+      players = pl;
+      updateScoreboard();
+      showQuestion(question, food);
+      disableTakenColors(pl);
     });
 
-    socket.on("all-players", (data) => {
-      players = data;
+    // after join
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      me.name  = nameIn.value.trim();
+      me.color = colorIn.value;
+      socket.emit("join", me);
+      overlay.style.display = "none";
     });
 
-    socket.on("new-player", (player) => {
-      players[player.id] = player;
+    // question update
+    socket.on("question-data", ({ question, food }) => {
+      showQuestion(question, food);
     });
 
-    socket.on("player-left", (id) => {
-      delete players[id];
-    });
-
-    socket.on("state-update", (data) => {
-      players = data;
+    // players or scores update
+    socket.on("players-update", pl => {
+      players = pl;
+      updateScoreboard();
       draw();
     });
 
-    let x = 50, y = 50, dx = 5, dy = 0;
-
+    // draw loop
     function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let id in players) {
-        const p = players[id];
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // draw foods
+      foodItems.forEach(f => {
+        ctx.fillStyle = "#f90";
+        ctx.fillRect(f.x, f.y, 10, 10);
+        ctx.fillStyle = "#000";
+        ctx.fillText(f.value, f.x+2, f.y+8);
+      });
+      // draw snakes
+      Object.values(players).forEach(p => {
+        if (!p.color) return;
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, 10, 10);
-        ctx.fillText(`Score: ${p.score}`, p.x, p.y - 5);
-      }
+      });
     }
 
-    function gameLoop() {
-      x += dx;
-      y += dy;
-
-      if (x > canvas.width) x = 0;
-      if (x < 0) x = canvas.width;
-      if (y > canvas.height) y = 0;
-      if (y < 0) y = canvas.height;
-
-      socket.emit("move", { x, y });
-    }
-
-    setInterval(gameLoop, 100);
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowUp") { dx = 0; dy = -5; }
-      else if (e.key === "ArrowDown") { dx = 0; dy = 5; }
-      else if (e.key === "ArrowLeft") { dx = -5; dy = 0; }
-      else if (e.key === "ArrowRight") { dx = 5; dy = 0; }
+    // game loop / movement
+    let x=50,y=50,dx=5,dy=0;
+    form.addEventListener("submit",_=>{ // after joining, start loop
+      setInterval(()=>{
+        x+=dx; y+=dy;
+        wrap();
+        socket.emit("move", { x,y });
+      }, 100);
+      document.addEventListener("keydown", e=>{
+        if(e.key==="ArrowUp"){dx=0;dy=-5;}
+        if(e.key==="ArrowDown"){dx=0;dy=5;}
+        if(e.key==="ArrowLeft"){dx=-5;dy=0;}
+        if(e.key==="ArrowRight"){dx=5;dy=0;}
+      });
     });
+
+    function wrap(){
+      if(x>canvas.width) x=0;
+      if(x<0) x=canvas.width;
+      if(y>canvas.height) y=0;
+      if(y<0) y=canvas.height;
+    }
+
+    // Show question & place foods
+    function showQuestion(q, food) {
+      qDiv.textContent = q;
+      foodItems = food;
+      draw();
+    }
+
+    // Scoreboard
+    function updateScoreboard() {
+      playersList.innerHTML = "";
+      Object.values(players)
+        .filter(p=>p.name)
+        .sort((a,b)=>b.score - a.score)
+        .forEach(p=>{
+          const div = document.createElement("div");
+          div.className = "player-row";
+          div.textContent = `${p.name} (${p.color}): ${p.score}`;
+          playersList.appendChild(div);
+        });
+    }
+
+    // disable taken colors on join UI
+    function disableTakenColors(pl) {
+      const taken = Object.values(pl).map(p=>p.color).filter(Boolean);
+      Array.from(colorIn.options).forEach(opt=>{
+        opt.disabled = taken.includes(opt.value);
+      });
+    }
   </script>
 </body>
 </html>
