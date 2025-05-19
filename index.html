@@ -32,6 +32,7 @@
       padding: 20px;
       border-radius: 8px;
       width: 100%;
+      box-sizing: border-box;
     }
     #game {
       border: 2px solid #000;
@@ -39,14 +40,17 @@
       height: 90vw;
       max-width: 600px;
       max-height: 600px;
-      display: block;
-      margin-top: 20px;
       background: #fff;
+      display: none;
+      margin-top: 20px;
     }
     #ui {
       margin-top: 10px;
       width: 90vw;
       max-width: 600px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
     }
     #question {
       font-size: 1.2rem;
@@ -55,6 +59,7 @@
     }
     #scoreboard {
       margin-top: 10px;
+      width: 100%;
     }
     .player-row {
       margin: 4px 0;
@@ -67,13 +72,11 @@
   <div id="overlay">
     <form id="joinForm">
       <h3>Join Game</h3>
-      <label>
-        Name:<br>
+      <label>Name:<br>
         <input type="text" id="name" required style="width:100%; padding:5px; box-sizing:border-box;">
       </label>
       <br><br>
-      <label>
-        Color:<br>
+      <label>Color:<br>
         <select id="color" style="width:100%; padding:5px; box-sizing:border-box;">
           <option value="green">Green</option>
           <option value="red">Red</option>
@@ -96,7 +99,6 @@
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
-    // Setup
     const socket = io("https://snake-server-7quw.onrender.com");
     const overlay = document.getElementById("overlay");
     const form    = document.getElementById("joinForm");
@@ -104,11 +106,12 @@
     const colorIn = document.getElementById("color");
     const canvas  = document.getElementById("game");
     const ctx     = canvas.getContext("2d");
+    const ui      = document.getElementById("ui");
     const qDiv    = document.getElementById("question");
     const playersList = document.getElementById("playersList");
 
-    let me = { name: null, color: null };
-    let players = {};    // { id: { name, color, score, snake: [{x,y}, ...] } }
+    let me = null;
+    let players = {};
     let foodItems = [];
 
     // Responsive canvas
@@ -120,7 +123,7 @@
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    // Join form handler
+    // Join game
     form.addEventListener("submit", e => {
       e.preventDefault();
       const name = nameIn.value.trim();
@@ -129,52 +132,53 @@
       me = { name, color };
       socket.emit("join", me);
       overlay.style.display = 'none';
+      canvas.style.display = 'block';
+      ui.style.display = 'flex';
     });
 
-    // Receive initial state
+    // Init state
     socket.on("init", ({ players: pl, question, food }) => {
       players = pl;
-      qDiv.textContent = question;
       foodItems = food;
+      qDiv.textContent = question;
+      updateScoreboard();
       render();
     });
 
-    // Receive question updates
+    // Question update
     socket.on("question-data", ({ question, food }) => {
       qDiv.textContent = question;
       foodItems = food;
       render();
     });
 
-    // Receive player state updates
+    // Players update
     socket.on("players-update", pl => {
       players = pl;
-      render();
       updateScoreboard();
+      render();
     });
 
-    // Arrow keys for direction
+    // Control direction
     document.addEventListener("keydown", e => {
-      if (!me.name) return;  // not joined yet
+      if (!me) return;
       let dir = null;
-      if (e.key === "ArrowUp")    dir = { x:0,  y:-10 };
-      if (e.key === "ArrowDown")  dir = { x:0,  y:10  };
-      if (e.key === "ArrowLeft")  dir = { x:-10,y:0   };
-      if (e.key === "ArrowRight") dir = { x:10, y:0   };
+      if (e.key === "ArrowUp") dir = { x:0,  y:-10 };
+      if (e.key === "ArrowDown") dir = { x:0,  y:10  };
+      if (e.key === "ArrowLeft") dir = { x:-10,y:0   };
+      if (e.key === "ArrowRight")dir = { x:10, y:0   };
       if (dir) socket.emit("direction", dir);
     });
 
-    // Render function
+    // Render everything
     function render() {
-      // clear
       ctx.clearRect(0,0,canvas.width,canvas.height);
       const scale = canvas.width / 400;
-
-      // draw food
+      // Draw food
       ctx.fillStyle = '#FFA500';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      Object.values(foodItems).forEach(f => {
+      foodItems.forEach(f => {
         const x = f.x * scale;
         const y = f.y * scale;
         ctx.fillRect(x, y, 10*scale, 10*scale);
@@ -183,8 +187,7 @@
         ctx.fillText(f.value, x + 5*scale, y + 5*scale);
         ctx.fillStyle = '#FFA500';
       });
-
-      // draw snakes
+      // Draw snakes
       Object.values(players).forEach(p => {
         if (!p.snake) return;
         ctx.fillStyle = p.color;
