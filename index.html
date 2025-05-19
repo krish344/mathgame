@@ -11,6 +11,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      background: #f0f0f0;
     }
     #overlay, #ui {
       width: 90vw;
@@ -31,7 +32,6 @@
       padding: 20px;
       border-radius: 8px;
       width: 100%;
-      box-sizing: border-box;
     }
     #game {
       border: 2px solid #000;
@@ -41,12 +41,12 @@
       max-height: 600px;
       display: block;
       margin-top: 20px;
+      background: #fff;
     }
     #ui {
       margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      width: 90vw;
+      max-width: 600px;
     }
     #question {
       font-size: 1.2rem;
@@ -55,7 +55,6 @@
     }
     #scoreboard {
       margin-top: 10px;
-      width: 100%;
     }
     .player-row {
       margin: 4px 0;
@@ -97,6 +96,7 @@
 
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
+    // Setup
     const socket = io("https://snake-server-7quw.onrender.com");
     const overlay = document.getElementById("overlay");
     const form    = document.getElementById("joinForm");
@@ -108,127 +108,107 @@
     const playersList = document.getElementById("playersList");
 
     let me = { name: null, color: null };
-    let players = {};
+    let players = {};    // { id: { name, color, score, snake: [{x,y}, ...] } }
     let foodItems = [];
 
-    // Responsive canvas setup
+    // Responsive canvas
     function resizeCanvas() {
       const size = Math.min(window.innerWidth * 0.9, 600);
       canvas.width  = size;
       canvas.height = size;
-      ctx.font = `${Math.floor(size / 40)}px sans-serif`;
     }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    // INITIAL DATA from server
-    socket.on("init", ({ players: pl, question, food }) => {
-      players = pl;
-      updateScoreboard();
-      showQuestion(question, food);
-      disableTakenColors(pl);
-    });
-
-    // JOIN form
+    // Join form handler
     form.addEventListener("submit", e => {
       e.preventDefault();
-      const name  = nameIn.value.trim();
+      const name = nameIn.value.trim();
       const color = colorIn.value;
       if (!name) return;
       me = { name, color };
       socket.emit("join", me);
-      overlay.style.display = "none";
+      overlay.style.display = 'none';
     });
 
-    // Receive new question & food
+    // Receive initial state
+    socket.on("init", ({ players: pl, question, food }) => {
+      players = pl;
+      qDiv.textContent = question;
+      foodItems = food;
+      render();
+    });
+
+    // Receive question updates
     socket.on("question-data", ({ question, food }) => {
-      showQuestion(question, food);
+      qDiv.textContent = question;
+      foodItems = food;
+      render();
     });
 
-    // Players update (positions & scores)
+    // Receive player state updates
     socket.on("players-update", pl => {
       players = pl;
+      render();
       updateScoreboard();
-      draw();
     });
 
-    // DRAW function
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Arrow keys for direction
+    document.addEventListener("keydown", e => {
+      if (!me.name) return;  // not joined yet
+      let dir = null;
+      if (e.key === "ArrowUp")    dir = { x:0,  y:-10 };
+      if (e.key === "ArrowDown")  dir = { x:0,  y:10  };
+      if (e.key === "ArrowLeft")  dir = { x:-10,y:0   };
+      if (e.key === "ArrowRight") dir = { x:10, y:0   };
+      if (dir) socket.emit("direction", dir);
+    });
 
-      // Draw food squares with labels
-      foodItems.forEach(f => {
-        ctx.fillStyle = "#f90";
-        ctx.fillRect(f.x, f.y, 10, 10);
-        ctx.fillStyle = "#000";
-        ctx.fillText(
-          f.value,
-          f.x + 2,
-          f.y + parseInt(ctx.font, 10) - 2
-        );
+    // Render function
+    function render() {
+      // clear
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      const scale = canvas.width / 400;
+
+      // draw food
+      ctx.fillStyle = '#FFA500';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      Object.values(foodItems).forEach(f => {
+        const x = f.x * scale;
+        const y = f.y * scale;
+        ctx.fillRect(x, y, 10*scale, 10*scale);
+        ctx.fillStyle = '#000';
+        ctx.font = `${12*scale}px sans-serif`;
+        ctx.fillText(f.value, x + 5*scale, y + 5*scale);
+        ctx.fillStyle = '#FFA500';
       });
 
-      // Draw snakes
+      // draw snakes
       Object.values(players).forEach(p => {
-        if (!p.color) return;
+        if (!p.snake) return;
         ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 10, 10);
+        p.snake.forEach(seg => {
+          const x = seg.x * scale;
+          const y = seg.y * scale;
+          ctx.fillRect(x, y, 10*scale, 10*scale);
+        });
       });
     }
 
-    // GAME LOOP
-    let x = 50, y = 50, dx = 5, dy = 0;
-    form.addEventListener("submit", () => {
-      setInterval(() => {
-        x += dx; y += dy;
-        wrap();
-        socket.emit("move", { x, y });
-      }, 100);
-
-      document.addEventListener("keydown", e => {
-        if (e.key === "ArrowUp")    { dx = 0; dy = -5; }
-        else if (e.key === "ArrowDown")  { dx = 0; dy = 5; }
-        else if (e.key === "ArrowLeft")  { dx = -5; dy = 0; }
-        else if (e.key === "ArrowRight") { dx = 5; dy = 0; }
-      });
-    });
-
-    function wrap() {
-      if (x > canvas.width)  x = 0;
-      if (x < 0)             x = canvas.width;
-      if (y > canvas.height) y = 0;
-      if (y < 0)             y = canvas.height;
-    }
-
-    // SHOW QUESTION & FOOD items
-    function showQuestion(q, food) {
-      qDiv.textContent = q;
-      foodItems = food;
-      draw();
-    }
-
-    // SCOREBOARD
+    // Update scoreboard
     function updateScoreboard() {
-      playersList.innerHTML = "";
+      playersList.innerHTML = '';
       Object.values(players)
         .filter(p => p.name)
-        .sort((a, b) => b.score - a.score)
+        .sort((a,b) => b.score - a.score)
         .forEach(p => {
-          const div = document.createElement("div");
-          div.className = "player-row";
+          const div = document.createElement('div');
+          div.className = 'player-row';
           div.textContent = `${p.name} (${p.color}): ${p.score}`;
           playersList.appendChild(div);
         });
     }
-
-    // Disable taken colors in join form
-    function disableTakenColors(pl) {
-      const taken = Object.values(pl).map(p => p.color).filter(Boolean);
-      Array.from(colorIn.options).forEach(opt => {
-        opt.disabled = taken.includes(opt.value);
-      });
-    }
   </script>
-
 </body>
 </html>
