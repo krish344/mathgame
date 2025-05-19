@@ -1,93 +1,127 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Math Snake Game</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #overlay, #ui {
+      width: 90vw;
+      max-width: 600px;
+    }
     #overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      height: 100vh;
       background: rgba(0,0,0,0.8);
       display: flex;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
+      z-index: 10;
     }
     #joinForm {
       background: #fff;
       padding: 20px;
-      border-radius: 5px;
+      border-radius: 8px;
+      width: 100%;
+      box-sizing: border-box;
     }
     #game {
+      border: 2px solid #000;
+      width: 90vw;
+      height: 90vw;
+      max-width: 600px;
+      max-height: 600px;
       display: block;
-      margin: 20px auto;
-      background: #eee;
+      margin-top: 20px;
     }
     #ui {
-      text-align: center;
-      font-family: sans-serif;
-    }
-    #playersList {
       margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #question {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    #scoreboard {
+      margin-top: 10px;
+      width: 100%;
     }
     .player-row {
-      padding: 5px;
+      margin: 4px 0;
     }
   </style>
 </head>
 <body>
+
+  <!-- Join Modal -->
   <div id="overlay">
     <form id="joinForm">
-      <input id="name" type="text" placeholder="Your name" required><br><br>
-      <select id="color">
-        <option value="red">Red</option>
-        <option value="blue">Blue</option>
-        <option value="green">Green</option>
-        <option value="purple">Purple</option>
-        <option value="pink">Pink</option>
-      </select><br><br>
-      <button type="submit">Join Game</button>
+      <h3>Join Game</h3>
+      <label>
+        Name:<br>
+        <input type="text" id="name" required style="width:100%; padding:5px; box-sizing:border-box;">
+      </label>
+      <br><br>
+      <label>
+        Color:<br>
+        <select id="color" style="width:100%; padding:5px; box-sizing:border-box;">
+          <option value="green">Green</option>
+          <option value="red">Red</option>
+        </select>
+      </label>
+      <br><br>
+      <button type="submit" style="padding:10px 20px;">Join!</button>
     </form>
   </div>
+
   <canvas id="game"></canvas>
+
   <div id="ui">
-    <div id="question"></div>
-    <div id="playersList"></div>
+    <div id="question">Loading question…</div>
+    <div id="scoreboard">
+      <strong>Scoreboard</strong>
+      <div id="playersList"></div>
+    </div>
   </div>
 
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
     const socket = io("https://snake-server-7quw.onrender.com");
     const overlay = document.getElementById("overlay");
-    const form = document.getElementById("joinForm");
-    const nameIn = document.getElementById("name");
+    const form    = document.getElementById("joinForm");
+    const nameIn  = document.getElementById("name");
     const colorIn = document.getElementById("color");
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
-    const qDiv = document.getElementById("question");
+    const canvas  = document.getElementById("game");
+    const ctx     = canvas.getContext("2d");
+    const qDiv    = document.getElementById("question");
     const playersList = document.getElementById("playersList");
 
     let me = { name: null, color: null };
     let players = {};
     let foodItems = [];
-    let segments = [{ x: 50, y: 50 }]; // Initial snake position
-    let dx = 10, dy = 0; // Initial direction: right, step size matches segment size
-    let shouldGrow = false;
-    let isActive = true;
 
     // Responsive canvas setup
     function resizeCanvas() {
       const size = Math.min(window.innerWidth * 0.9, 600);
-      canvas.width = size;
+      canvas.width  = size;
       canvas.height = size;
       ctx.font = `${Math.floor(size / 40)}px sans-serif`;
     }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    // Initial data from server
+    // INITIAL DATA from server
     socket.on("init", ({ players: pl, question, food }) => {
       players = pl;
       updateScoreboard();
@@ -95,73 +129,30 @@
       disableTakenColors(pl);
     });
 
-    // Join form submission
+    // JOIN form
     form.addEventListener("submit", e => {
       e.preventDefault();
-      const name = nameIn.value.trim();
+      const name  = nameIn.value.trim();
       const color = colorIn.value;
       if (!name) return;
       me = { name, color };
       socket.emit("join", me);
       overlay.style.display = "none";
-
-      // Start game loop
-      setInterval(() => {
-        if (!isActive) return;
-
-        const head = { x: segments[0].x + dx, y: segments[0].y + dy };
-        wrap(head);
-        segments.unshift(head);
-        if (!shouldGrow) {
-          segments.pop();
-        } else {
-          shouldGrow = false;
-        }
-        socket.emit("move", { segments });
-
-        foodItems.forEach((f, index) => {
-          if (head.x === f.x && head.y === f.y) {
-            socket.emit("eat", { foodIndex: index });
-          }
-        });
-      }, 100);
-
-      // Direction controls
-      document.addEventListener("keydown", e => {
-        if (!isActive) return;
-        if (e.key === "ArrowUp" && dy === 0) { dx = 0; dy = -10; }
-        else if (e.key === "ArrowDown" && dy === 0) { dx = 0; dy = 10; }
-        else if (e.key === "ArrowLeft" && dx === 0) { dx = -10; dy = 0; }
-        else if (e.key === "ArrowRight" && dx === 0) { dx = 10; dy = 0; }
-      });
     });
 
-    // Receive new question and food
+    // Receive new question & food
     socket.on("question-data", ({ question, food }) => {
       showQuestion(question, food);
     });
 
-    // Players update
+    // Players update (positions & scores)
     socket.on("players-update", pl => {
       players = pl;
       updateScoreboard();
       draw();
     });
 
-    // Handle eat response
-    socket.on("eat-response", ({ correct, foodIndex }) => {
-      if (!isActive) return;
-      if (correct) {
-        shouldGrow = true;
-        socket.emit("next-question");
-      } else {
-        isActive = false;
-        socket.emit("game-over");
-        alert("Game Over! You ate the wrong answer.");
-      }
-    });
-
-    // Draw function
+    // DRAW function
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -179,30 +170,44 @@
 
       // Draw snakes
       Object.values(players).forEach(p => {
-        if (!p.color || !p.segments) return;
+        if (!p.color) return;
         ctx.fillStyle = p.color;
-        p.segments.forEach(segment => {
-          ctx.fillRect(segment.x, segment.y, 10, 10);
-        });
+        ctx.fillRect(p.x, p.y, 10, 10);
       });
     }
 
-    // Wrap function
-    function wrap(head) {
-      if (head.x >= canvas.width) head.x = 0;
-      else if (head.x < 0) head.x = canvas.width - 10;
-      if (head.y >= canvas.height) head.y = 0;
-      else if (head.y < 0) head.y = canvas.height - 10;
+    // GAME LOOP
+    let x = 50, y = 50, dx = 5, dy = 0;
+    form.addEventListener("submit", () => {
+      setInterval(() => {
+        x += dx; y += dy;
+        wrap();
+        socket.emit("move", { x, y });
+      }, 100);
+
+      document.addEventListener("keydown", e => {
+        if (e.key === "ArrowUp")    { dx = 0; dy = -5; }
+        else if (e.key === "ArrowDown")  { dx = 0; dy = 5; }
+        else if (e.key === "ArrowLeft")  { dx = -5; dy = 0; }
+        else if (e.key === "ArrowRight") { dx = 5; dy = 0; }
+      });
+    });
+
+    function wrap() {
+      if (x > canvas.width)  x = 0;
+      if (x < 0)             x = canvas.width;
+      if (y > canvas.height) y = 0;
+      if (y < 0)             y = canvas.height;
     }
 
-    // Show question and food items
+    // SHOW QUESTION & FOOD items
     function showQuestion(q, food) {
       qDiv.textContent = q;
       foodItems = food;
       draw();
     }
 
-    // Update scoreboard
+    // SCOREBOARD
     function updateScoreboard() {
       playersList.innerHTML = "";
       Object.values(players)
@@ -224,5 +229,6 @@
       });
     }
   </script>
+
 </body>
 </html>
